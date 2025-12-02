@@ -1,5 +1,24 @@
-pub const part1 = part1Strings;
+pub const part1 = part1Ints;
 pub const part2 = part2Strings;
+
+pub fn part1Ints(input: []const u8) usize {
+    var total: usize = 0;
+
+    var input_iter = Iterator{
+        .buffer = if (input[input.len-1] == '\n') input[0..input.len-1] else input,
+        .index = 0,
+        .delimiter = ',',
+    };
+
+    while (input_iter.next()) |range_string| {
+        const first_string, const last_string = mem.cutScalar(u8, range_string, '-').?;
+        const first = fmt.parseUnsigned(usize, first_string, 10) catch unreachable;
+        const second = fmt.parseUnsigned(usize, last_string, 10) catch unreachable;
+        for (first..second+1) |id| total += id * @intFromBool(isDouble(id) catch unreachable);
+    }
+
+    return total;
+}
 
 pub fn part1Strings(input: []const u8) u64 {
     var total: u64 = 0;
@@ -14,8 +33,8 @@ pub fn part1Strings(input: []const u8) u64 {
 
     while (input_iter.next()) |range_string| {
         const first_string, const last_string = mem.cutScalar(u8, range_string, '-').?;
-        const first = fmt.parseInt(u64, first_string, 10) catch unreachable;
-        const second = fmt.parseInt(u64, last_string, 10) catch unreachable;
+        const first = fmt.parseUnsigned(u64, first_string, 10) catch unreachable;
+        const second = fmt.parseUnsigned(u64, last_string, 10) catch unreachable;
 
         for (first..second+1) |id| {
             const id_string = fmt.bufPrint(&buf, "{d}", .{id}) catch unreachable;
@@ -46,8 +65,8 @@ pub fn part2Strings(input: []const u8) u64 {
 
     while (input_iter.next()) |range_string| {
         const first_string, const last_string = mem.cutScalar(u8, range_string, '-').?;
-        const first = fmt.parseInt(u64, first_string, 10) catch unreachable;
-        const second = fmt.parseInt(u64, last_string, 10) catch unreachable;
+        const first = fmt.parseUnsigned(u64, first_string, 10) catch unreachable;
+        const second = fmt.parseUnsigned(u64, last_string, 10) catch unreachable;
 
         for (first..second+1) |id| {
             const id_string = fmt.bufPrint(&buf, "{d}", .{id}) catch unreachable;
@@ -67,6 +86,40 @@ pub fn part2Strings(input: []const u8) u64 {
     }
 
     return total;
+}
+
+fn isDouble(id: usize) !bool {
+    // 321123 -> 1000, 1212 -> 100, 12345 -> 100
+    const half_mag = try math.powi(usize, 10, @divTrunc(digits(id), 2));
+    // 321123 -> 321, 1212 -> 12, 12345 -> 123
+    const upper = @divTrunc(id, half_mag);
+    // 321123 -> 321123-321000=123, 12345 -> 12345-12300=45
+    const lower = id - half_mag*upper;
+    return upper == lower;
+}
+
+test digits {
+    const R = math.Log2Int(usize);
+    try testing.expectEqual(@as(R, 1), digits(@as(usize, 0)));
+    try testing.expectEqual(@as(R, 1), digits(@as(usize, 1)));
+    try testing.expectEqual(@as(R, 1), digits(@as(usize, 5)));
+    try testing.expectEqual(@as(R, 1), digits(@as(usize, 9)));
+    try testing.expectEqual(@as(R, 2), digits(@as(usize, 10)));
+    try testing.expectEqual(@as(R, 2), digits(@as(usize, 16)));
+    try testing.expectEqual(@as(R, 2), digits(@as(usize, 18)));
+    try testing.expectEqual(@as(R, 2), digits(@as(usize, 20)));
+    try testing.expectEqual(@as(R, 2), digits(@as(usize, 49)));
+    try testing.expectEqual(@as(R, 3), digits(@as(usize, 100)));
+    try testing.expectEqual(@as(R, 3), digits(@as(usize, 212)));
+}
+
+fn digits(int: anytype) math.Log2Int(@TypeOf(int)) {
+    if (int > 0) {
+        @branchHint(.likely);
+        return math.log10_int(int)+1;
+    } else {
+        return 0+1;
+    }
 }
 
 test incrementString {
@@ -106,6 +159,7 @@ fn incrementString(string: []u8) !void {
 const Iterator = mem.SplitIterator(u8, .scalar);
 const assert = std.debug.assert;
 
+const math = std.math;
 const testing = std.testing;
 const fmt = std.fmt;
 const mem = std.mem;
