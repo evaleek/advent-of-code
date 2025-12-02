@@ -1,8 +1,11 @@
-pub fn part1(input: []const u8) u64 {
+pub const part1 = part1Strings;
+pub const part2 = part2Strings;
+
+pub fn part1Strings(input: []const u8) u64 {
     var total: u64 = 0;
 
     var input_iter = Iterator{
-        .buffer = input,
+        .buffer = if (input[input.len-1] == '\n') input[0..input.len-1] else input,
         .index = 0,
         .delimiter = ',',
     };
@@ -10,15 +13,7 @@ pub fn part1(input: []const u8) u64 {
     var buf: [64]u8 = undefined;
 
     while (input_iter.next()) |range_string| {
-        var iter = mem.SplitIterator(u8, .any){
-            .buffer = range_string,
-            .index = 0,
-            .delimiter = &.{ '-', '\n' },
-        };
-        const first_string = iter.first();
-        const last_string = iter.next().?;
-        // cutScalar is only on master
-        //const first_string, const last_string = mem.cutScalar(u8, range_string, '-').?;
+        const first_string, const last_string = mem.cutScalar(u8, range_string, '-').?;
         const first = fmt.parseInt(u64, first_string, 10) catch unreachable;
         const second = fmt.parseInt(u64, last_string, 10) catch unreachable;
 
@@ -38,11 +33,11 @@ pub fn part1(input: []const u8) u64 {
     return total;
 }
 
-pub fn part2(input: []const u8) u64 {
+pub fn part2Strings(input: []const u8) u64 {
     var total: u64 = 0;
 
     var input_iter = Iterator{
-        .buffer = input,
+        .buffer = if (input[input.len-1] == '\n') input[0..input.len-1] else input,
         .index = 0,
         .delimiter = ',',
     };
@@ -50,13 +45,7 @@ pub fn part2(input: []const u8) u64 {
     var buf: [64]u8 = undefined;
 
     while (input_iter.next()) |range_string| {
-        var iter = mem.SplitIterator(u8, .any){
-            .buffer = range_string,
-            .index = 0,
-            .delimiter = &.{ '-', '\n' },
-        };
-        const first_string = iter.first();
-        const last_string = iter.next().?;
+        const first_string, const last_string = mem.cutScalar(u8, range_string, '-').?;
         const first = fmt.parseInt(u64, first_string, 10) catch unreachable;
         const second = fmt.parseInt(u64, last_string, 10) catch unreachable;
 
@@ -80,8 +69,44 @@ pub fn part2(input: []const u8) u64 {
     return total;
 }
 
-const Iterator = mem.SplitIterator(u8, .scalar);
+test incrementString {
+    var buf: [4]u8 = "9898".*;
 
+    try incrementString(&buf);
+    try testing.expectEqualSlices(u8, "9899", &buf);
+
+    try incrementString(&buf);
+    try testing.expectEqualSlices(u8, "9900", &buf);
+
+    buf = "9999".*;
+
+    try testing.expectError(error.Overflow, incrementString(&buf));
+}
+
+/// Asserts that `string` is a sequence of numeral characters,
+/// and increments it like it was an integer.
+fn incrementString(string: []u8) !void {
+    var i: usize = string.len-1;
+    while (i >= 0) : (i -= 1) {
+        assert(string[i] >= '0' and string[i] <= '9');
+        if (string[i] == '9') {
+            if (i == 0) {
+                @branchHint(.cold);
+                return error.Overflow;
+            } else {
+                string[i] = '0';
+            }
+        } else {
+            string[i] += 1;
+            break;
+        }
+    }
+}
+
+const Iterator = mem.SplitIterator(u8, .scalar);
+const assert = std.debug.assert;
+
+const testing = std.testing;
 const fmt = std.fmt;
 const mem = std.mem;
 const std = @import("std");
