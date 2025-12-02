@@ -1,7 +1,8 @@
 pub const part1 = part1Ints;
-pub const part2 = part2Ints;
-pub fn part1Ints(input: []const u8) usize {
-    var total: usize = 0;
+pub const part2 = part2Range;
+
+pub fn part1Ints(input: []const u8) u64 {
+    var total: u64 = 0;
 
     var input_iter = Iterator{
         .buffer = if (input[input.len-1] == '\n') input[0..input.len-1] else input,
@@ -11,16 +12,16 @@ pub fn part1Ints(input: []const u8) usize {
 
     while (input_iter.next()) |range_string| {
         const first_string, const last_string = mem.cutScalar(u8, range_string, '-').?;
-        const first = fmt.parseUnsigned(usize, first_string, 10) catch unreachable;
-        const second = fmt.parseUnsigned(usize, last_string, 10) catch unreachable;
+        const first = fmt.parseUnsigned(u64, first_string, 10) catch unreachable;
+        const second = fmt.parseUnsigned(u64, last_string, 10) catch unreachable;
         for (first..second+1) |id| total += id * @intFromBool(isDouble(id) catch unreachable);
     }
 
     return total;
 }
 
-pub fn part2Ints(input: []const u8) usize {
-    var total: usize = 0;
+pub fn part2Ints(input: []const u8) u64 {
+    var total: u64 = 0;
 
     var input_iter = Iterator{
         .buffer = if (input[input.len-1] == '\n') input[0..input.len-1] else input,
@@ -30,17 +31,34 @@ pub fn part2Ints(input: []const u8) usize {
 
     while (input_iter.next()) |range_string| {
         const first_string, const last_string = mem.cutScalar(u8, range_string, '-').?;
-        const first = fmt.parseUnsigned(usize, first_string, 10) catch unreachable;
-        const second = fmt.parseUnsigned(usize, last_string, 10) catch unreachable;
+        const first = fmt.parseUnsigned(u64, first_string, 10) catch unreachable;
+        const second = fmt.parseUnsigned(u64, last_string, 10) catch unreachable;
         for (first..second+1) |id| total += id * @intFromBool(isRepeat(id) catch unreachable);
     }
 
     return total;
 }
 
-fn isDouble(id: usize) !bool {
+pub fn part2Range(input: []const u8) u64 {
+    var total: u64 = 0;
+
+    var input_iter = Iterator{
+        .buffer = if (input[input.len-1] == '\n') input[0..input.len-1] else input,
+        .index = 0,
+        .delimiter = ',',
+    };
+
+    while (input_iter.next()) |range_string| {
+        const first_string, const last_string = mem.cutScalar(u8, range_string, '-').?;
+        total += sumRepeatsInRange(first_string, last_string);
+    }
+
+    return total;
+}
+
+fn isDouble(id: anytype) !bool {
     // 321123 -> 1000, 1212 -> 100, 12345 -> 100
-    const half_mag = try math.powi(usize, 10, @divTrunc(digits(id), 2));
+    const half_mag = try math.powi(@TypeOf(id), 10, @divTrunc(digits(id), 2));
     // 321123 -> 321, 1212 -> 12, 12345 -> 123
     const upper = @divTrunc(id, half_mag);
     // 321123 -> 321123-321000=123, 12345 -> 12345-12300=45
@@ -48,12 +66,12 @@ fn isDouble(id: usize) !bool {
     return upper == lower;
 }
 
-fn isRepeat(id: usize) !bool {
+fn isRepeat(id: anytype) !bool {
     const d = digits(id);
     var mag = @divTrunc(d, 2);
     each_sublen: while (mag > 0) : (mag -= 1) {
         if (d%mag!=0) continue :each_sublen;
-        const dec = try math.powi(usize, 10, mag);
+        const dec = try math.powi(@TypeOf(id), 10, mag);
         var upper = @divTrunc(id, dec);
         const lower = id - upper*dec;
         if (upper == lower) {
@@ -72,19 +90,52 @@ fn isRepeat(id: usize) !bool {
     return false;
 }
 
+/// A faster solution than enumerating and checking each number in the range
+/// turns out to be simply enumerating every valid repeat number,
+/// and checking if they fall within the range.
+fn sumRepeatsInRange(first_str: []const u8, last_str: []const u8) u64 {
+    var total: u64 = 0;
+
+    const first = fmt.parseUnsigned(u64, first_str, 10) catch unreachable;
+    const last = fmt.parseUnsigned(u64, last_str, 10) catch unreachable;
+
+    assert(last > first);
+
+    var last_dec: u64 = 1;
+    const width = @max(first_str.len, last_str.len);
+    for (1..@divTrunc(width, 2)+1) |sub_width| {
+        const dec = math.powi(u64, 10, sub_width) catch unreachable;
+        defer last_dec = dec;
+        for (last_dec..dec) |sub| {
+            // This check adds a lot of time, is there a way to get around it?
+            if (isRepeat(sub) catch unreachable) continue;
+            var candidate: u64 = sub;
+            while (digits(candidate) <= width) : (candidate = candidate*dec+sub) {
+                if (
+                    candidate >= first and
+                    candidate <= last and
+                    candidate >= 10
+                ) total += candidate;
+            }
+        }
+    }
+
+    return total;
+}
+
 test digits {
-    const R = math.Log2Int(usize);
-    try testing.expectEqual(@as(R, 1), digits(@as(usize, 0)));
-    try testing.expectEqual(@as(R, 1), digits(@as(usize, 1)));
-    try testing.expectEqual(@as(R, 1), digits(@as(usize, 5)));
-    try testing.expectEqual(@as(R, 1), digits(@as(usize, 9)));
-    try testing.expectEqual(@as(R, 2), digits(@as(usize, 10)));
-    try testing.expectEqual(@as(R, 2), digits(@as(usize, 16)));
-    try testing.expectEqual(@as(R, 2), digits(@as(usize, 18)));
-    try testing.expectEqual(@as(R, 2), digits(@as(usize, 20)));
-    try testing.expectEqual(@as(R, 2), digits(@as(usize, 49)));
-    try testing.expectEqual(@as(R, 3), digits(@as(usize, 100)));
-    try testing.expectEqual(@as(R, 3), digits(@as(usize, 212)));
+    const R = math.Log2Int(u64);
+    try testing.expectEqual(@as(R, 1), digits(@as(u64, 0)));
+    try testing.expectEqual(@as(R, 1), digits(@as(u64, 1)));
+    try testing.expectEqual(@as(R, 1), digits(@as(u64, 5)));
+    try testing.expectEqual(@as(R, 1), digits(@as(u64, 9)));
+    try testing.expectEqual(@as(R, 2), digits(@as(u64, 10)));
+    try testing.expectEqual(@as(R, 2), digits(@as(u64, 16)));
+    try testing.expectEqual(@as(R, 2), digits(@as(u64, 18)));
+    try testing.expectEqual(@as(R, 2), digits(@as(u64, 20)));
+    try testing.expectEqual(@as(R, 2), digits(@as(u64, 49)));
+    try testing.expectEqual(@as(R, 3), digits(@as(u64, 100)));
+    try testing.expectEqual(@as(R, 3), digits(@as(u64, 212)));
 }
 
 fn digits(int: anytype) math.Log2Int(@TypeOf(int)) {
