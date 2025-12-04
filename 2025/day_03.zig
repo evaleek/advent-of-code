@@ -124,7 +124,6 @@ test intFromChar {
     try testing.expectEqual(3, intFromChar('3'));
     try testing.expectEqual(4, intFromChar('4'));
     try testing.expectEqual(5, intFromChar('5'));
-
     try testing.expectEqual(6, intFromChar('6'));
     try testing.expectEqual(7, intFromChar('7'));
     try testing.expectEqual(8, intFromChar('8'));
