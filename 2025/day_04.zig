@@ -1,4 +1,4 @@
-pub const part1 = part1Double;
+pub const part1 = part1InPlace;
 
 test part1 {
     const example_input =
@@ -14,11 +14,11 @@ test part1 {
         \\@.@.@@@.@.
         \\
     ;
+    var input_mut: [example_input.len]u8 = example_input.*;
     const example_answer = 13;
     // part1Double is a working solution
     try testing.expectEqual(example_answer, part1Double(example_input));
-    try testing.expectEqual(part1Double(example_input), part1(example_input));
-    try testing.expectEqual(example_answer, part1(example_input));
+    try testing.expectEqual(part1Double(example_input), part1(&input_mut));
 }
 
 /// Solution by keeping a second buffer to track adjacency counts.
@@ -69,6 +69,18 @@ pub fn part1Double(input: []const u8) !u16 {
     return total;
 }
 
+pub fn part1InPlace(input: []u8) !u16 {
+    assert(input[0] != '\n');
+    const adjacencies: []i8 = inputToAdjacencies(
+        input,
+        ( mem.findScalarPos(u8, input, 0, '\n') orelse return error.InputInvalid ) + 1,
+        math.maxInt(i8),
+    );
+    var total: u16 = 0;
+    for (adjacencies) |a| total += @intFromBool(a<4);
+    return total;
+}
+
 //test part2 {
 //    const example_input =
 //        \\..@@.@@@@.
@@ -97,6 +109,7 @@ test inputToAdjacencies {
         \\
     ;
     var input: [input_literal.len]u8 = input_literal.*;
+    const nar: i8 = 127;
     const expected = [6*5]i8{
         nar, nar,   3,   3, nar, nar,
           3,   6,   6, nar,   3, nar,
@@ -104,12 +117,10 @@ test inputToAdjacencies {
           4, nar,   6,   7,   5, nar,
           2,   3, nar,   4,   3, nar,
     };
-    try testing.expectEqualSlices(i8, &expected, inputToAdjacencies(&input, 6));
+    try testing.expectEqualSlices(i8, &expected, inputToAdjacencies(&input, 6, nar));
 }
 
 const roll: u8 = '@';
-/// Not-A-Roll
-const nar: i8 = 127;
 const roll_as_adj: i8 = @bitCast(roll);
 
 // Assert that the input characters do not overlap with the signed ints we use
@@ -125,26 +136,33 @@ comptime {
 }
 
 /// Mutate the input in-place to an adjacency count buffer
-fn inputToAdjacencies(input: []u8, line_diff: usize) []i8 {
+fn inputToAdjacencies(input: []u8, line_diff: usize, comptime nar: i8) []i8 {
+    comptime { switch (@as(u8, @bitCast(nar))) {
+        '@', '.', '\n' => |c| @compileError(std.fmt.comptimePrint(
+            "not-a-roll {s} value {d} conflicts with valid input char \'{c}\'",
+            .{ @typeName(@TypeOf(nar)), nar, c },
+        )),
+        else => {},
+    }}
     assert(input[input.len-1] == '\n');
     const adj: []i8 = @ptrCast(input);
     for (adj[0..adj.len-1], 0..) |*a, i| if (a.* == roll_as_adj) {
         var count: i8 = 0;
 
         if (math.sub(usize, i, line_diff)) |i_prev| {
-            if (i_prev!=0) count += @intFromBool(isRollDuringCast(adj[i_prev-1]));
-            count += @intFromBool(isRollDuringCast(adj[i_prev]));
-            count += @intFromBool(isRollDuringCast(adj[i_prev+1]));
+            if (i_prev!=0) count += @intFromBool(isRollDuringCast(adj[i_prev-1], nar));
+            count += @intFromBool(isRollDuringCast(adj[i_prev], nar));
+            count += @intFromBool(isRollDuringCast(adj[i_prev+1], nar));
         } else |_| {}
 
-        if (i!=0) count += @intFromBool(isRollDuringCast(adj[i-1]));
-        count += @intFromBool(isRollDuringCast(adj[i+1]));
+        if (i!=0) count += @intFromBool(isRollDuringCast(adj[i-1], nar));
+        count += @intFromBool(isRollDuringCast(adj[i+1], nar));
 
         const i_next = i+line_diff;
         if (i_next < adj.len) {
-            count += @intFromBool(isRollDuringCast(adj[i_next-1]));
-            count += @intFromBool(isRollDuringCast(adj[i_next]));
-            count += @intFromBool(isRollDuringCast(adj[i_next+1]));
+            count += @intFromBool(isRollDuringCast(adj[i_next-1], nar));
+            count += @intFromBool(isRollDuringCast(adj[i_next], nar));
+            count += @intFromBool(isRollDuringCast(adj[i_next+1], nar));
         }
 
         a.* = count;
@@ -155,7 +173,7 @@ fn inputToAdjacencies(input: []u8, line_diff: usize) []i8 {
 
 /// Check if a byte is a roll ('@')
 /// or a roll that we have already cast to an adjacency count
-fn isRollDuringCast(adj: i8) bool {
+fn isRollDuringCast(adj: i8, comptime nar: i8) bool {
     return switch (adj) {
         roll_as_adj, 0...8 => true,
         nar,
