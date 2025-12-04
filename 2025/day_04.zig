@@ -17,8 +17,8 @@ test part1 {
     var input_mut: [example_input.len]u8 = example_input.*;
     const example_answer = 13;
     // part1Double is a working solution
-    try testing.expectEqual(example_answer, part1Double(example_input));
-    try testing.expectEqual(part1Double(example_input), part1(&input_mut));
+    try testing.expectEqual(example_answer, try part1Double(example_input));
+    try testing.expectEqual(part1Double(example_input), try part1(&input_mut));
 }
 
 /// Solution by keeping a second buffer to track adjacency counts.
@@ -81,23 +81,68 @@ pub fn part1InPlace(input: []u8) !u16 {
     return total;
 }
 
-//test part2 {
-//    const example_input =
-//        \\..@@.@@@@.
-//        \\@@@.@.@.@@
-//        \\@@@@@.@.@@
-//        \\@.@@@@..@.
-//        \\@@.@@@@.@@
-//        \\.@@@@@@@.@
-//        \\.@.@.@.@@@
-//        \\@.@@@.@@@@
-//        \\.@@@@@@@@.
-//        \\@.@.@@@.@.
-//        \\
-//    ;
-//    const example_answer = 43;
-//    try testing.expectEqual(example_answer, part2(example_input));
-//}
+test part2 {
+    const example_input =
+        \\..@@.@@@@.
+        \\@@@.@.@.@@
+        \\@@@@@.@.@@
+        \\@.@@@@..@.
+        \\@@.@@@@.@@
+        \\.@@@@@@@.@
+        \\.@.@.@.@@@
+        \\@.@@@.@@@@
+        \\.@@@@@@@@.
+        \\@.@.@@@.@.
+        \\
+    ;
+    var input_mut: [example_input.len]u8 = example_input.*;
+    const example_answer = 43;
+    try testing.expectEqual(example_answer, try part2(&input_mut));
+}
+
+pub fn part2(input: []u8) !u16 {
+    assert(input[0] != '\n');
+    const line_diff: usize = ( mem.findScalarPos(u8, input, 0, '\n') orelse return error.InputInvalid ) + 1;
+    const not_a_roll: i8 = math.maxInt(i8);
+    const adjacencies: []i8 = inputToAdjacencies(input, line_diff, not_a_roll);
+    assert(adjacencies[adjacencies.len-1] == not_a_roll);
+
+    var removed_count: u16 = 0;
+
+    var cont: bool = true;
+    while (cont) {
+        cont = false;
+
+        // Avoid the final byte to skip an additional test within the loop
+        for (adjacencies[0..adjacencies.len-1], 0..) |*a, i| {
+            if (a.* < 4) {
+                a.* = not_a_roll;
+                removed_count += 1;
+
+                if (math.sub(usize, i, line_diff)) |i_prev| {
+                    if (i_prev!=0) adjacencies[i_prev-1] -= 1;
+                    adjacencies[i_prev] -= 1;
+                    adjacencies[i_prev+1] -= 1;
+                } else |_| {}
+
+                if (i!=0) adjacencies[i-1] -= 1;
+                adjacencies[i+1] -= 1;
+
+                const i_next = i+line_diff;
+                if (i_next < adjacencies.len) {
+                    adjacencies[i_next-1] -= 1;
+                    adjacencies[i_next] -= 1;
+                    // Here we would have to test (i_next+1 < adjacencies.len) if we did not reslice
+                    adjacencies[i_next+1] -= 1;
+                }
+
+                cont = true;
+            }
+        }
+    }
+
+    return removed_count;
+}
 
 test inputToAdjacencies {
     const input_literal =
@@ -135,7 +180,13 @@ comptime {
     };
 }
 
-/// Mutate the input in-place to an adjacency count buffer
+/// Mutate the input in-place to an adjacency count buffer.
+///
+/// I'm realizing after finishing my solution that
+/// it is probably not necessary to bitcast to signed,
+/// because saturating subtraction exists,
+/// but the solution still works.
+/// This way potentially avoids the test for saturation?
 fn inputToAdjacencies(input: []u8, line_diff: usize, comptime nar: i8) []i8 {
     comptime { switch (@as(u8, @bitCast(nar))) {
         '@', '.', '\n' => |c| @compileError(std.fmt.comptimePrint(
