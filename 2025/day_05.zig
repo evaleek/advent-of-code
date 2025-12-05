@@ -146,6 +146,108 @@ pub fn part1(input: []const u8) !u16 {
     return count;
 }
 
+test part2 {
+    const input =
+        \\3-5
+        \\10-14
+        \\16-20
+        \\12-18
+        \\
+        \\1
+        \\5
+        \\8
+        \\11
+        \\17
+        \\32
+        \\
+    ;
+    const answer = 14;
+    try testing.expectEqual(answer, try part2(input));
+}
+
+/// After eagerly optimizing part 1, the answer to part 2 is trivial.
+/// We can sort the input ranges just like in part 1.
+pub fn part2(input: []const u8) !u64 {
+    range_buffer = undefined;
+    var range_list: std.ArrayList([2]u64) = .{
+        .items = range_buffer[0..0],
+        .capacity = range_buffer.len,
+    };
+
+    var line_iter = mem.splitScalar(u8, input, '\n');
+
+    // Identical to part 1
+    while (line_iter.next()) |line| {
+        if (line.len == 0) break;
+
+        const new_range: [2]u64 = parse_range: {
+            const left, const right = mem.cutScalar(u8, line, '-')
+                orelse return error.ParseFailure;
+            break :parse_range [2]u64{
+                fmt.parseUnsigned(u64, left, 10) catch return error.ParseFailure,
+                fmt.parseUnsigned(u64, right, 10) catch return error.ParseFailure,
+            };
+        };
+
+        if (new_range[0] > new_range[1]) return error.ParseFailure;
+
+        var list_iter = mem.reverseIterator(range_list.items);
+        while (list_iter.nextPtr()) |range_ptr| {
+            if ( new_range[0] >= range_ptr[0] ) {
+                const i = list_iter.index;
+                if ( new_range[0] <= range_ptr[1]+1 ) {
+                    range_ptr[1] = @max(new_range[1], range_ptr[1]);
+                    while ( i+1 < range_list.items.len and range_ptr[1]+1 >= range_list.items[i+1][0] ) {
+                        range_ptr[1] = @max(range_list.items[i+1][1], range_ptr[1]);
+                        _ = range_list.orderedRemove(i+1);
+                    }
+                } else {
+                    if ( i+1 < range_list.items.len ) {
+                        if ( new_range[1]+1 >= range_list.items[i+1][0] ) {
+                            range_list.items[i+1][0] = new_range[0];
+                            range_list.items[i+1][1] = @max(new_range[1], range_list.items[i+1][1]);
+                            while ( i+2 < range_list.items.len and range_list.items[i+1][1]+1 >= range_list.items[i+2][0] ) {
+                                range_list.items[i+1][1] = @max(range_list.items[i+2][1], range_list.items[i+1][1]);
+                                _ = range_list.orderedRemove(i+2);
+                            }
+                        } else {
+                            try range_list.insertBounded(i+1, new_range);
+                        }
+                    } else {
+                        try range_list.appendBounded(new_range);
+                    }
+                }
+                break;
+            }
+        } else {
+            if ( range_list.items.len != 0 and new_range[1]+1 >= range_list.items[0][0] ) {
+                range_list.items[0][0] = new_range[0];
+                range_list.items[0][1] = @max(new_range[1], range_list.items[0][1]);
+                while ( range_list.items.len > 1 and range_list.items[0][1]+1 >= range_list.items[1][0] ) {
+                    range_list.items[0][1] = @max(range_list.items[1][1], range_list.items[0][1]);
+                    _ = range_list.orderedRemove(1);
+                }
+            } else {
+                try range_list.insertBounded(0, new_range);
+            }
+        }
+    }
+
+    if (range_list.items.len > 0) for (
+        range_list.items[0..range_list.items.len-1],
+        range_list.items[1..],
+    ) |prev, next| {
+        assert(prev[0] <= prev[1]);
+        assert(next[0] <= next[1]);
+        assert(next[0] > prev[1]);
+    };
+
+    // Only change from part 1 is here
+    var total: u64 = 0;
+    for (range_list.items) |range| total += range[1]-range[0]+1;
+    return total;
+}
+
 const assert = std.debug.assert;
 const testing = std.testing;
 const fmt = std.fmt;
