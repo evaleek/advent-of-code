@@ -23,3 +23,5 @@ and I then repeatedly measure the runtime of the solution function on the alloca
 | 05/2 | 11.6 µs ± 0.3 µs                  |
 | 06/1 | 33.2 µs ± 0.5 µs                  |
 | 06/2 | 26.2 µs ± 0.7 µs                  |
+| 07/1 | 2.5 µs ± 0.2 µs                   |
+| 07/2 | 9.8 µs ± 0.2 µs                   |
