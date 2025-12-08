@@ -1,5 +1,10 @@
 My solutions to Advent of Code problems.
 
+Note, if running these locally:
+my solutions assume Unix newline encoding (lines delimited by a single `\n`)
+and will most likely fail assertions or print the incorrect answer
+for the Windows `CR LF` or old Mac `CR` styles.
+
 # Benchmarks
 
 Measured with 10,000 iterations on my Ryzen 9 5900X with Zig `ReleaseFast`.
