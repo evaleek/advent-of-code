@@ -28,7 +28,7 @@ test part1 {
 
 
 pub fn part1(input: []const u8) !usize {
-    const pairs: []Pair = try pairsFromInput(input, &positions_buffer, &pairs_buffer);
+    _, const pairs: []Pair = try parse(input, &positions_buffer, &pairs_buffer);
     // We grow a list of pairs unordered, and sort them all at once at the end.
     std.mem.sort(Pair, pairs, {}, Pair.lessThanDistance);
     // Now, we can take the first *N* to have the *N* shortest pairs.
@@ -49,6 +49,48 @@ pub fn part1(input: []const u8) !usize {
     return circuits[0].count() * circuits[1].count() * circuits[2].count();
 }
 
+pub fn part2(input: []const u8) !u32 {
+    const positions: []const Position, var pairs: []Pair = try parse(input, &positions_buffer, &pairs_buffer);
+    std.mem.sort(Pair, pairs, {}, Pair.lessThanDistance);
+
+    circuit_buffer = undefined;
+    var circuit_list: std.ArrayList(Circuit) = .{
+        .items = circuit_buffer[0..0],
+        .capacity = circuit_buffer.len,
+    };
+
+    const empty: Circuit = .initEmpty();
+
+    const init_connections_count = if (@import("builtin").is_test) 10 else 1000;
+    circuit_list.items = circuit_buffer[0..init_connections_count];
+    for (circuit_list.items, pairs[0..init_connections_count]) |*circuit, connection| {
+        circuit.* = empty;
+        circuit.setValue(connection.junctions[0], true);
+        circuit.setValue(connection.junctions[1], true);
+    }
+    var last_junctions: [2]Pair.Index = pairs[init_connections_count-1].junctions;
+    pairs = pairs[init_connections_count..];
+    circuit_list.items = mergeCircuits(circuit_list.items);
+
+    while (circuit_list.items.len > 1) {
+        const next_pair = pairs[0];
+        last_junctions = next_pair.junctions;
+        pairs = pairs[1..];
+        try circuit_list.appendBounded(circuit_from_pair: {
+            var circuit: Circuit = empty;
+            circuit.setValue(next_pair.junctions[0], true);
+            circuit.setValue(next_pair.junctions[1], true);
+            break :circuit_from_pair circuit;
+        });
+        circuit_list.items = mergeCircuits(circuit_list.items);
+    }
+
+    const final_a: Position = positions[last_junctions[0]];
+    const final_b: Position = positions[last_junctions[1]];
+
+    return @as(u32, @intFromFloat(final_a[0])) * @as(u32, @intFromFloat(final_b[0]));
+}
+
 const max_junctions = 1024;
 var positions_buffer: [max_junctions]Position = undefined;
 // I'm not really satisfied with this solution, but
@@ -62,7 +104,7 @@ var pairs_buffer: [max_junctions*max_junctions]Pair = undefined;
 var circuit_buffer: [max_junctions]Circuit = undefined;
 
 /// Parse and grow the list of all possible connections.
-fn pairsFromInput(input: []const u8, pos_buf: []Position, pair_buf: []Pair) ![]Pair {
+fn parse(input: []const u8, pos_buf: []Position, pair_buf: []Pair) !struct { []Position, []Pair } {
     @memset(pos_buf, undefined);
     @memset(pair_buf, undefined);
     var positions_list: std.ArrayList(Position) = .{
@@ -96,8 +138,9 @@ fn pairsFromInput(input: []const u8, pos_buf: []Position, pair_buf: []Pair) ![]P
         try positions_list.appendBounded(position);
         positions_count += 1; // because zig slice len is always usize
     }
-    return pairs_list.items;
+    return .{ positions_list.items, pairs_list.items };
 }
+
 
 /// There are much more optimal ways to merge lists of sets
 /// (this is worst case O(n^3), I think)
@@ -144,6 +187,34 @@ fn mergeToCircuits(connections: []const Pair, circuit_buf: []Circuit) []Circuit 
     return circuit_list.items;
 }
 
+/// In part 2, merge repeatedly.
+fn mergeCircuits(circuits: []Circuit) []Circuit {
+    const empty: Circuit = .initEmpty();
+    var len: usize = circuits.len;
+    var i: usize = len;
+    outer: while (i != 0) {
+        i -= 1;
+        var j: usize = len;
+        while (j != 0) {
+            j -= 1;
+            if (j!=i and !Circuit.eql(empty, Circuit.intersectWith(
+                circuits[i],
+                circuits[j],
+            ))) {
+                // Merge *j* into *i*, and start again from the top
+                circuits[i].setUnion(circuits[j]);
+                // Swap remove directly on the slice
+                circuits[j] = circuits[len-1];
+                circuits[len-1] = undefined;
+                len -= 1;
+                i = len;
+                continue :outer;
+            }
+        }
+    }
+    return circuits[0..len];
+}
+
 /// Sum square difference of position is the same ordering as
 /// square root of sum square difference of position (Euclidean distance).
 /// Square roots are expensive and not necessary.
@@ -169,7 +240,7 @@ const Position = @Vector(3, f32);
 const Pair = struct {
     distance: f32,
     junctions: [2]Index,
-    const Index = u10;
+    pub const Index = u10;
     // Assert that this index pair is not overflowed by the buffer size
     comptime { assert(math.maxInt(Index)+1 >= max_junctions); }
 
